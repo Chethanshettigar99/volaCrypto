@@ -1,0 +1,46 @@
+import pandas as pd
+import numpy as np
+import matplotlib.pyplot as plt
+import seaborn as sns
+from arch import arch_model
+
+df = pd.read_csv("1inch.csv")
+
+# Convert date column to datetime format
+df['Date'] = pd.to_datetime(df['Date'])
+df = df.sort_values('Date')
+
+# Copy dataset for processing
+crypto_df = df.copy()
+
+# Calculate rolling standard deviation (volatility measure)
+crypto_df['Rolling_Std_Dev'] = crypto_df['Close'].rolling(window=20).std()
+
+# Calculate Bollinger Bands
+crypto_df['SMA20'] = crypto_df['Close'].rolling(window=20).mean()
+crypto_df['Upper_Band'] = crypto_df['SMA20'] + (crypto_df['Rolling_Std_Dev'] * 2)
+crypto_df['Lower_Band'] = crypto_df['SMA20'] - (crypto_df['Rolling_Std_Dev'] * 2)
+
+# GARCH Model for volatility prediction
+returns = crypto_df['Close'].pct_change().dropna() * 100  # Convert to percentage
+model = arch_model(returns, vol='Garch', p=1, q=1)
+res = model.fit(disp='off')
+crypto_df.loc[returns.index, 'GARCH_Volatility'] = res.conditional_volatility
+
+# Plot Bollinger Bands
+plt.figure(figsize=(12,6))
+plt.plot(crypto_df['Date'], crypto_df['Close'], label='Close Price', color='blue')
+plt.plot(crypto_df['Date'], crypto_df['Upper_Band'], label='Upper Bollinger Band', linestyle='dashed', color='red')
+plt.plot(crypto_df['Date'], crypto_df['Lower_Band'], label='Lower Bollinger Band', linestyle='dashed', color='green')
+plt.fill_between(crypto_df['Date'], crypto_df['Upper_Band'], crypto_df['Lower_Band'], color='gray', alpha=0.2)
+plt.title('Crypto Price with Bollinger Bands')
+plt.legend()
+plt.show()
+
+# Plot Volatility
+plt.figure(figsize=(12,6))
+plt.plot(crypto_df['Date'], crypto_df['Rolling_Std_Dev'], label='Rolling Standard Deviation', color='orange')
+plt.plot(crypto_df['Date'], crypto_df['GARCH_Volatility'], label='GARCH Predicted Volatility', color='purple')
+plt.title('Crypto Volatility Analysis')
+plt.legend()
+plt.show()
